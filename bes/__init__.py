@@ -19,7 +19,6 @@ DEFAULT = {
     'protocol': 'UDP',
     'index': 'log',
     'datestamp_index': False,
-    'type': 'record',
     }
 
 
@@ -62,23 +61,31 @@ class Connection(object):
         self._sock.sendto(message, (self.host, self.port))
 
 
-def log(index=None, type=None, sort_keys=False, **kwargs):
+def log(type, index=None, sort_keys=False, **kwargs):
     """Log an arbitrary payload dictionary to Elastic Search
 
     Uses the default connection configuration.  If you need to
     override any of them, build your payload dict by hand and use
     emit() instead.
 
-    You can optionally override the index and type of payload, for
-    later filtering in Elastic Search.  This means that `index` and
-    `type` are not available as payload keys.
+    The type of message is required it is sent to ElasticSearch as the
+    message type. Fields within a type should be of a consistent data
+    type, though it is acceptible to add additional fields.
+
+    You can optionally override the index of payload, for later
+    filtering in Elastic Search.  This means that `index` is not
+    available as payload key.
+
     """
+    # @timestamp and @version to match Logstash's messsage format
+    # https://logstash.jira.com/browse/LOGSTASH-675
+    # Kibana automatically recognizes @timestamp
     kwargs['@timestamp'] = _datetime.datetime.utcnow().isoformat()
     kwargs['@version'] = 1
-    return emit(payload=kwargs, index=index, type=type, sort_keys=sort_keys)
+    return emit(type=type, payload=kwargs, index=index, sort_keys=sort_keys)
 
 
-def emit(payload, index=None, datestamp_index=None, type=None,
+def emit(type, payload, index=None, datestamp_index=None, 
          sort_keys=False, connection_class=Connection, **kwargs):
     """Send bulk-upload data to Elastic Search
 
@@ -87,15 +94,8 @@ def emit(payload, index=None, datestamp_index=None, type=None,
     http://www.elasticsearch.org/guide/reference/api/bulk/
     http://www.elasticsearch.org/guide/reference/api/bulk-udp/
     """
-    #TODO indexes, types, and what Kibana likes.
-    #Try it out and adjust
-    #throwing all of payloads **kwargs into an 'additional' or simular field might 
-    #required, and I don't know what happens if we send different data types with
-    #the same name ie a **kwargs of my_special_key: str and my_special_key: {'foo': 'bar'}
     if index is None:
         index = DEFAULT['index']
-    if type is None:
-        type = DEFAULT['type']
     if datestamp_index is None:
         datestamp_index = DEFAULT['datestamp_index']
     if datestamp_index:
